@@ -1,0 +1,9 @@
+spring:
+  redis:
+    host: 203.195.162.66
+    port: 7100
+    password: sun19950103
+    timeout: 1000
+    database: 0
+
+
