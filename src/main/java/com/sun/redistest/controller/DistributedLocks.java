@@ -1,6 +1,8 @@
 package com.sun.redistest.controller;
 
 import com.alibaba.fastjson.JSONObject;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,6 +22,9 @@ public class DistributedLocks {
     @Autowired
     RedisTemplate<String, String> redisTemplate;
 
+    @Autowired
+    RedissonClient redissonClient;
+
     /**
      * 首先生产一个UUID，这个UUID是确保在删除key的时候，是同一个，避免了删除了其他线程创建UUID。
      * 这个是为了避免遇到这种情况，当redis主服务器设置好key后，还没有同步到从服务器的时候，主服务器突然
@@ -29,7 +34,7 @@ public class DistributedLocks {
     @RequestMapping("getlock")
     public String getLock(String key) {
         JSONObject ob = new JSONObject();
-        String uuid=null;
+        String uuid = null;
         try {
             uuid = UUID.randomUUID().toString();
             //设置一个key-value，过期的时间是10s
@@ -44,7 +49,7 @@ public class DistributedLocks {
             System.out.println("业务执行结束");
         } finally {
             String currentUUID = redisTemplate.opsForValue().get(key);
-            if (currentUUID!=null&&uuid.equals(currentUUID)) {
+            if (currentUUID != null && uuid.equals(currentUUID)) {
                 //只有和当前的uuid相同才删除当前的锁
                 redisTemplate.delete(key);
             }
@@ -52,5 +57,26 @@ public class DistributedLocks {
         ob.put("success", true);
         ob.put("msg", "获取锁成功!");
         return ob.toJSONString();
+    }
+
+    @RequestMapping("test")
+    public String test() throws InterruptedException {
+        RLock lock = redissonClient.getLock("sun");
+        boolean b = lock.tryLock(10, TimeUnit.SECONDS);
+        try {
+            if (b) {
+                String res = redisTemplate.opsForValue().get("product001");
+                Integer product001 = Integer.parseInt(res);
+                if (product001 > 0) {
+                    Long result = redisTemplate.opsForValue().decrement("product001");
+                    System.out.println("还剩余:" + result + "个");
+                }
+            }
+        } finally {
+            if(b)
+            lock.unlock();
+        }
+        return "sucess";
+
     }
 }
